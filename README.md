@@ -1,221 +1,278 @@
-\section*{Wikimedia Traffic Reliability \& Demand Dynamics Engine}
+# Wikimedia Traffic Reliability \& Demand Dynamics Engine
 
-\noindent
-\textbf{Technology Stack} \\
-Python 3.8+ \\
-DuckDB (Out-of-Core OLAP Engine) \\
-Dataset Size: 41GB Raw Telemetry Logs \\
-System Status: Production Ready
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue?style=for-the-badge&logo=python)
+![DuckDB](https://img.shields.io/badge/DuckDB-Out--of--Core-orange?style=for-the-badge)
+![Data Size](https://img.shields.io/badge/Dataset-41GB_Raw-lightgrey?style=for-the-badge)
+![Status](https://img.shields.io/badge/Status-Production_Ready-success?style=for-the-badge)
 
-\bigskip
+---
 
-\section*{Project Overview}
+## Project Overview
 
-This repository contains a production-grade data pipeline and volatility analysis engine designed to evaluate measurement reliability across large-scale consumer traffic derived from Wikimedia Foundation telemetry.
+This repository contains a production-grade data pipeline and volatility analysis engine designed to evaluate measurement reliability across large-scale consumer traffic using Wikimedia Foundation telemetry.
 
-The primary objective is to quantify system stability, detect structural demand shifts, and mathematically isolate statistical noise from actionable business growth. Rather than relying on pre-processed datasets, the system ingests, structures, and analyzes 41GB of raw machine-generated server logs representing approximately 15 billion monthly page views.
+The primary objective is to quantify system stability, detect structural demand shifts, and mathematically isolate statistical noise from actionable business growth. Rather than relying on pre-processed datasets, this project ingests, structures, and analyzes **41GB of raw machine-generated server logs (approximately 15 billion monthly views)** in order to recreate a realistic enterprise telemetry environment.
 
-The project intentionally simulates a realistic enterprise telemetry environment in which analysts must build reliable measurement frameworks directly on top of raw infrastructure data.
+---
 
-\bigskip
+## System Architecture and Workflow
 
-\section*{System Architecture}
+Processing highly granular compressed log files on commodity hardware (16GB RAM) requires strict architectural discipline. The system avoids full-memory loading and instead uses an embedded OLAP strategy with DuckDB.
 
-Processing highly granular compressed telemetry logs on standard hardware (16GB RAM) requires strict out-of-core design principles. The architecture avoids full-memory loading and instead leverages an embedded OLAP query engine.
+```mermaid
+graph TD
+    A[Raw Telemetry <br> 742 .gz files] -->|Streaming Ingestion| B(DuckDB OLAP Engine)
+    B -->|Schema Enforcement| C{Canonical Aggregation}
 
-\bigskip
+    C -->|Project-Level| D[Hourly Project Views]
+    C -->|Global-Level| E[Monthly Global Metrics]
 
-\textbf{Pipeline Flow}
+    D --> F[(Parquet Artifacts)]
+    E --> F
 
-\begin{enumerate}
-\item Raw Telemetry Ingestion (742 compressed .gz files)
-\item Streaming Query Execution through DuckDB
-\item Canonical Aggregation Layer
-\begin{itemize}
-\item Hourly Project-Level Views
-\item Global Monthly Metrics
-\end{itemize}
-\item Artifact Serialization to Columnar Storage (Parquet)
-\item Volatility Modeling and Noise Estimation
-\item Anomaly Detection Backtesting using Rolling Statistical Thresholds
-\end{enumerate}
+    F --> G[Volatility \& Noise Engine]
+    G --> H[3-Sigma Anomaly Backtester]
 
-\bigskip
+    classDef database fill:#f9f,stroke:#333,stroke-width:2px;
+    class B,C database;
+```
 
-\section*{Operational Pipeline Design}
+## Operational Pipeline Design
 
-The system is organized into four major operational stages.
+The pipeline is organized into four operational phases.
 
-\subsection*{1. Out-of-Core Ingestion}
+---
 
-The pipeline uses DuckDB to directly query compressed \texttt{.gz} telemetry logs via streaming execution. This eliminates the need for full file extraction and bypasses memory limitations typically associated with Pandas-based pipelines.
+### 1. Out-of-Core Ingestion
 
-This design allows tens of gigabytes of log data to be processed on commodity hardware without requiring distributed infrastructure.
+DuckDB directly queries compressed `.gz` telemetry logs through streaming execution.
 
-\subsection*{2. Dimensionality Reduction}
+This architecture ensures that system memory usage remains far smaller than the dataset size.
 
-Raw event-level telemetry is collapsed into structured analytical tables using SQL aggregation. The system produces temporal warehouse tables at hourly and project granularity while preserving immutable raw logs for auditability.
+$$
+\text{Memory Usage} \ll \text{Dataset Size}
+$$
 
-These derived tables allow millisecond-latency analytical queries while maintaining a clean separation between raw and analytical layers.
+No intermediate decompression is required, eliminating disk-heavy extraction and bypassing the memory limitations typical of in-memory dataframe systems.
 
-\subsection*{3. Statistical Modeling}
+---
 
-The engine evaluates volatility using the Coefficient of Variation:
+### 2. Dimensionality Reduction
 
-\[
+Raw event-level telemetry is transformed into structured warehouse tables using SQL aggregation.
+
+Two canonical datasets are produced.
+
+**Hourly Project Views**
+
+$$
+\text{Hourly Project Views} = f(\text{timestamp}, \text{project})
+$$
+
+**Monthly Global Traffic**
+
+$$
+\text{Monthly Global Traffic} =
+\sum_{i=1}^{N} \text{ProjectTraffic}_i
+$$
+
+This transformation preserves immutable raw logs while enabling millisecond-latency analytical queries.
+
+---
+
+### 3. Statistical Modeling
+
+System volatility is quantified using the **Coefficient of Variation (CV)**.
+
+$$
 CV = \frac{\sigma}{\mu}
-\]
+$$
 
-where
+Where
 
-\begin{itemize}
-\item $\sigma$ represents the standard deviation of traffic measurements
-\item $\mu$ represents the mean traffic level
-\end{itemize}
+$$
+\sigma = \text{Standard Deviation}
+$$
 
-This metric provides a normalized measure of variability, enabling comparison across segments with drastically different traffic scales.
+$$
+\mu = \text{Mean}
+$$
 
-\subsection*{4. Automated Artifact Serialization}
+This metric establishes the natural **noise band** of the system.
 
-Downstream analytical datasets are automatically exported as compressed Parquet artifacts. These include:
+---
 
-\begin{itemize}
-\item Concentration Metrics
-\item Structural Breadth Indicators
-\item Volatility Profiles
-\end{itemize}
+### 4. Automated Serialization
 
-Columnar storage enables efficient downstream integration with BI platforms and allows reproducible historical auditing.
+All analytical outputs are exported as compressed **Parquet artifacts**, including:
 
-\bigskip
+- Concentration metrics  
+- Structural breadth metrics  
+- Volatility measurements  
 
-\section*{Quantitative Findings: The Aggregation Illusion}
+This provides:
 
-The analysis reveals a significant discrepancy between aggregate system stability and segment-level volatility.
+- Fast downstream BI consumption  
+- Reproducible historical auditing  
+- Minimal storage footprint  
 
-\subsection*{Macro-Level Stability}
+---
 
-Global aggregate traffic exhibits controlled temporal variability.
+# Quantitative Findings: The Aggregation Illusion
 
-\[
+Coefficient of Variation analysis reveals the risk of interpreting aggregate dashboards without structural context.
+
+---
+
+## Macro-Level Stability
+
+Global aggregate traffic displays tightly controlled temporal variability.
+
+$$
 CV_{global} \approx 0.15
-\]
+$$
 
-At the platform level, traffic appears highly stable when measured through aggregated dashboards.
+This indicates a relatively stable macro demand signal.
 
-\subsection*{Micro-Level Instability}
+---
 
-Segment-level traffic exhibits substantially higher volatility.
+## Micro-Level Instability
 
-\[
-CV_{project\_average} \approx 1.04
-\]
+Segment-level traffic (individual Wikimedia projects) demonstrates substantial volatility.
 
-Long-tail segments display extreme burst-driven behavior.
+$$
+CV_{avg\_project} \approx 1.04
+$$
 
-\[
-CV_{extreme} > 9.0
-\]
+Long-tail projects exhibit extreme spike-driven traffic patterns.
 
-This indicates that individual projects can experience dramatic fluctuations even while the platform aggregate appears stable.
+$$
+CV_{tail} > 9.0
+$$
 
-\subsection*{Decision Noise Band}
+---
 
-Variance reduction across the 742-hour observation window allows estimation of the natural statistical noise floor for month-over-month measurements.
+## Decision Noise Band
 
-\[
-Noise\ Floor < 1\%
-\]
+Variance reduction across the monthly observation window (742 hours) produces a natural noise floor.
 
-This implies that executive decisions reacting to aggregate growth signals below the 1–2\% range are statistically likely to be responding to random hourly fluctuation rather than genuine structural demand shifts.
+$$
+\sigma_{MoM} < 1\%
+$$
 
-\bigskip
+This implies:
 
-\section*{Backtesting and Production Monitoring}
+$$
+\text{Observed Growth} < 2\% \Rightarrow \text{Likely Statistical Noise}
+$$
 
-To operationalize these findings, the repository includes a multi-resolution monitoring simulator implemented through the function:
+Executive decisions reacting to changes below this threshold are statistically likely to be responding to random hourly fluctuations rather than structural demand growth.
 
-\texttt{simulate\_anomaly\_detection\_backtest}
+---
+
+# Backtesting and Production Monitoring
+
+To operationalize these insights, the repository includes a multi-resolution anomaly detection simulator.
 
 The monitoring architecture combines:
 
-\begin{itemize}
-\item Rolling Z-score anomaly detection
-\item Three-sigma statistical thresholding
-\item Exponential smoothing for volatility stabilization
-\end{itemize}
+- Rolling Z-score anomaly detection  
+- Three-sigma statistical thresholds  
+- Exponential smoothing for signal stabilization  
 
-This framework suppresses false positives from naturally volatile segments while still detecting true structural anomalies.
+---
 
-\bigskip
+## Z-Score Detection
 
-\textbf{Simulated Monitoring Performance (10,000 Parallel Streams)}
+$$
+Z = \frac{x - \mu}{\sigma}
+$$
 
-\begin{tabular}{|l|c|}
-\hline
-Metric & Performance \\
-\hline
-Detection F1 Score & 0.98 \\
-True Positive Rate (Recall) & 0.97 \\
-False Positive Rate & 0.0075 \\
-Verified Monthly Noise Floor & $<0.85\%$ \\
-\hline
-\end{tabular}
+An anomaly is triggered when:
 
-\bigskip
+$$
+|Z| > 3
+$$
 
-\section*{Reproducibility and Setup}
+---
 
-\subsection*{Prerequisites}
+## Backtesting Performance
 
-\begin{itemize}
-\item Python 3.8 or higher
-\item At least 20GB of available disk space
-\end{itemize}
+Simulated environment: **10,000 parallel data streams**
 
-\bigskip
+| Metric | Performance |
+|------|-------------|
+| Detection F1-Score | 0.98 |
+| True Positive Rate (Recall) | 0.97 |
+| False Positive Rate | 0.0075 |
+| Verified Monthly Noise Floor | < 0.85% |
 
-\subsection*{Repository Setup}
+These results demonstrate that the monitoring system effectively suppresses volatility-driven false alarms while maintaining high anomaly sensitivity.
 
-\begin{verbatim}
+---
+
+# Reproducibility and Setup
+
+## Prerequisites
+
+- Python 3.8+
+- 20GB or more available disk space
+
+---
+
+## 1. Repository Setup
+
+Clone the repository and initialize the Python environment.
+
+```bash
 git clone https://github.com/yourusername/wiki-traffic-reliability.git
 cd wiki-traffic-reliability
 
 python -m venv venv
-source venv/bin/activate
-
-# Windows
-venv\Scripts\activate
+source venv/bin/activate        # Windows: venv\Scripts\activate
 
 pip install duckdb pandas numpy matplotlib statsmodels scikit-learn
-\end{verbatim}
+```
 
-\bigskip
+---
 
-\subsection*{Data Acquisition}
+## 2. Data Acquisition
 
-Download the raw December 2025 telemetry dataset from the Wikimedia Foundation dumps.
+Download the raw December 2025 Wikimedia telemetry dataset.
 
-\begin{verbatim}
+```bash
 wget -r -np -nH --cut-dirs=4 -A "*.gz" \
 https://dumps.wikimedia.org/other/pageviews/2025/2025-12/
-\end{verbatim}
+```
 
-Ensure that the download directory matches the path expected by the ingestion scripts.
+Ensure the download directory matches the path configured inside the ingestion scripts.
 
-\bigskip
+---
 
-\subsection*{Pipeline Execution}
+## 3. Pipeline Execution
 
-Execute the pipeline in three sequential stages.
+Execute the pipeline in three stages.
 
-\begin{verbatim}
-# 1. Build the DuckDB warehouse and run canonical aggregations
+```bash
+# Build the DuckDB warehouse and run canonical aggregations
 python build_warehouse.py
 
-# 2. Execute volatility analysis and generate Parquet artifacts
+# Run volatility analysis and export analytical parquet artifacts
 python run_volatility_analysis.py
 
-# 3. Run structural change and anomaly detection backtests
+# Execute structural change detection and anomaly backtests
 python run_backtests.py
-\end{verbatim}
+```
+
+---
+
+# Output Artifacts
+
+The pipeline produces several analytical datasets:
+
+- `project_hourly_views.parquet`
+- `global_monthly_metrics.parquet`
+- `volatility_statistics.parquet`
+- `anomaly_detection_results.parquet`
+
+These artifacts are optimized for downstream BI tools, research analysis, and historical reproducibility.
