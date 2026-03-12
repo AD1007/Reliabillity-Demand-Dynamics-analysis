@@ -2,7 +2,6 @@
 
 [![Live Interactive Dashboard](https://img.shields.io/badge/Live_Dashboard-View_Here-FF4B4B?style=for-the-badge&logo=plotly)](https://ad1007.github.io/Reliabillity-Demand-Dynamics-analysis/)
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue?style=for-the-badge&logo=python)
-![DuckDB](https://img.shields.io/badge/DuckDB-Out--of--Core-orange?style=for-the-badge)
 ![Data Size](https://img.shields.io/badge/Dataset-41GB_Raw-lightgrey?style=for-the-badge)
 ![Status](https://img.shields.io/badge/Status-Production_Ready-success?style=for-the-badge)
 
