@@ -1,0 +1,7 @@
+raw/
+warehouse/
+analytics/
+*.duckdb
+*.duckdb.wal
+*.gz
+*.parquet
